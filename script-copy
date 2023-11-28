@@ -1,0 +1,231 @@
+### Scripts baremetal instances
+
+
+#### Create kes-client, kes-monitor, kes-server 
+Image: Ubuntu 23.04
+Enable TLS and SSL Required
+Add public key
+Use same node
+Domain: lab.min.dev
+
+
+#### Note node ip and port
+kes-client 65.49.37.20 20062
+kes-monitor 65.49.37.20 20039
+kes-server 65.49.37.20 20046
+
+
+#### SSH into instances to continue demo
+ssh -p 20062 ubuntu@65.49.37.20 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off"
+ssh -p 20039 ubuntu@65.49.37.20 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off"
+ssh -p 20046 ubuntu@65.49.37.20 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off"
+
+
+#### Copy kes-server-baremetal.sh to kes-server.
+scp -P 20046 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off" ~/Documents/MinIO/kes-demo/kes-server-baremetal.sh ubuntu@65.49.37.20:/home/ubuntu/kes-server-baremetal.sh
+
+
+#### Run kes-server-baremetal.sh on kes-server. Note outputs.
+./kes-server-baremetal.sh
+Output
+```
+Copy the following public.crt to the client.
+-----BEGIN CERTIFICATE-----
+MIIBNzCB6qADAgECAhAJvGmSI4UUVqCVJNXpZAyEMAUGAytlcDAVMRMwEQYDVQQD
+EwprZXMtc2VydmVyMB4XDTIzMTEyNDAwNDEzMVoXDTIzMTIyNDAwNDEzMVowFTET
+MBEGA1UEAxMKa2VzLXNlcnZlcjAqMAUGAytlcAMhAGkWLo4xryb7tQIrP66dF8Lg
+MmXgWOfGc+OXqcWd2UOjo1AwTjAOBgNVHQ8BAf8EBAMCB4AwHQYDVR0lBBYwFAYI
+KwYBBQUHAwIGCCsGAQUFBwMBMAwGA1UdEwEB/wQCMAAwDwYDVR0RBAgwBocECkyw
+iTAFBgMrZXADQQCaARqgt3UJTXLT1O41iSrMI/Wynep8ynkiU3RnjVxLYsnTbuOx
+6OEGMmeYOgITrurz8fc20Mk+VtMwRqNDqkgJ
+-----END CERTIFICATE-----
+
+
+Use the following KES_SERVER and KES_API_KEY on the client.
+export KES_API_KEY=kes:v1:ACvot40fGFVTTl+Nt1tz9+CjpWAj22xRnwwb+qU9BekH
+export KES_SERVER=https://10.76.176.137:9073
+
+
+Use the following KES_SERVER and KES_API_KEY on the monitor.
+export KES_API_KEY=kes:v1:AOGaEJbTs23+kSBTQJ2/Bcww8VMUyIV7T/MrDUhWm3dl
+export KES_SERVER=https://10.76.176.137:9073
+```
+
+
+#### Modify kes-monitor-baremetal.sh with kes-server-baremetal.sh outputs.
+
+
+#### Copy kes-monitor-baremetal.sh to kes-monitor.
+scp -P 20039 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off" ~/Documents/MinIO/kes-demo/kes-monitor-baremetal.sh ubuntu@65.49.37.20:/home/ubuntu/kes-monitor-baremetal.sh
+
+
+#### Run kes-monitor-baremetal.sh on kes-monitor.
+./kes-monitor-baremetal.sh
+
+
+#### On kes-monitor, observe that KES is indeed accessible and that all the KES APIs are available to the monitor.
+Show variables exported in script
+Show API list in terminal
+Show kes log running with `ps -ef | grep kes`
+This logs will be used the show interaction by the kes client
+
+
+#### Modify kes-client-baremetal.sh with kes-server-baremetal.sh outputs.
+
+
+#### Copy kes-client-baremetal.sh to kes-client.
+```
+scp -P 20062 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off" ~/Documents/MinIO/kes-demo/kes-client-baremetal.sh ubuntu@65.49.37.20:/home/ubuntu/kes-client-baremetal.sh
+```
+
+
+#### Run kes-client-baremetal.sh on kes-client.
+```
+./kes-client-baremetal.sh
+```
+
+#### Observe that Encryption and decryption is enabled by running `mc admin kms key status`
+
+
+#### Observe that minio starts up correctly
+
+
+#### Observe that KES is also accessible from the client (minio) by running a `kes key ls`
+```
+export KES_API_KEY=kes:v1:ACvot40fGFVTTl+Nt1tz9+CjpWAj22xRnwwb+qU9BekH
+export KES_SERVER=https://10.76.176.137:9073
+./kes key ls -k
+```
+Output
+```
+Key
+minio-key
+```
+
+#### Try to create a key for which there is no API access
+```
+./kes key create invalid-key -k
+```
+Output
+```
+Error: failed to create key "invalid-key": not authorized: insufficient permissions
+```
+
+
+#### Access minio thru the UI. Test encryption.
+
+
+#### Observe the kes-monitor has been logging operations.
+
+
+#### Continue in kes-monitor by exporting KES_API_KEY and KES_SERVER in foreground and running e.g. ./kes key ls -k
+```
+export KES_API_KEY=kes:v1:AOGaEJbTs23+kSBTQJ2/Bcww8VMUyIV7T/MrDUhWm3dl
+export KES_SERVER=https://10.76.176.137:9073
+./kes key create admin-key -k
+./kes key ls -k
+```
+
+
+***
+
+
+### Scripts operator/tenant instance
+
+
+#### Create kes-operator
+Image: Ubuntu 23.04
+Enable TLS and SSL Required
+Add public key
+Use same node
+Domain: lab.min.dev
+
+
+#### Note node ip and port
+kes-operator 65.49.37.20 20034
+
+
+#### Copy kes-k8s-tenant.sh and kes-k8s-operator.sh to kes-operator.
+scp -P 20034 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off" ~/Documents/MinIO/kes-demo/kes-k8s-operator.sh ubuntu@65.49.37.20:/home/ubuntu/kes-k8s-operator.sh
+scp -P 20034 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off" ~/Documents/MinIO/kes-demo/kes-k8s-tenant.sh ubuntu@65.49.37.20:/home/ubuntu/kes-k8s-tenant.sh
+
+
+#### SSH into instances to continue demo
+ssh -p 20034 ubuntu@65.49.37.20 -o "ServerAliveInterval=5" -o "ServerAliveCountMax=100000" -o "StrictHostKeyChecking=off"
+
+
+#### Run kes-k8s-operator.sh then kes-k8s-tenant.sh on kes-operator.
+```
+./kes-k8s-operator.sh && ./kes-k8s-tenant.sh
+```
+
+#### Examine secrets: <tenant>-kes-tls and kes-configuration in kes pod. public.crt and private.key are loaded into the kes pods for server.crt and server.key
+```
+kubectl -n tenant-kms-encrypted get tenant
+```
+Output
+```
+NAME      STATE         AGE
+myminio   Initialized   2m35s
+```
+```
+kubectl -n tenant-kms-encrypted get secret myminio-kes-tls -o yaml
+kubectl -n tenant-kms-encrypted get pods
+kubectl -n tenant-kms-encrypted get pod/myminio-kes-0 -o json | jq '.spec.volumes'
+```
+
+#### Examine secrets: <tenant>-client-tls in minio pod
+```
+kubectl -n tenant-kms-encrypted get secret myminio-client-tls -o yaml
+kubectl -n tenant-kms-encrypted get pod/myminio-pool-0-0 -o json | jq '.spec.volumes'
+```
+
+
+#### Examine secrets: kes-configuration in kes pod
+See above
+
+
+#### Login to KES pod. Observe configuration, server cert and key
+```
+kubectl -n tenant-kms-encrypted exec -it myminio-kes-0 -- /bin/sh
+```
+```
+ls -la /tmp/kes
+exit
+```
+
+
+#### Login to minio pod. Observe client cert and key. 
+```
+kubectl -n tenant-kms-encrypted exec -it myminio-pool-0-0 -- /bin/sh
+```
+```
+ls -la /tmp/certs
+exit
+```
+
+
+#### On kes-operator, observe Encryption and decryption is enabled by running mc admin kms key status
+```
+mc/mc admin kms key status kes-demo --insecure
+```
+
+
+#### On kes-operator, observe minio starts up correctly, from logs
+```
+kubectl -n tenant-kms-encrypted logs pod/myminio-pool-0-0
+```
+
+
+#### Access minio thru the UI. Test encryption. `https://kes-operator.lab.min.dev:30043/login` or `https://kes-operator.lab.min.dev:30045` with `minio/minio123`
+```
+SA_TOKEN=$(kubectl -n minio-operator get secret console-sa-secret -o jsonpath="{.data.token}" | base64 --decode)
+echo $SA_TOKEN
+```
+
+
+#### Corrolary
+Observe the variables are set and that the minio pods are Running
+```
+kubectl -n tenant-kms-encrypted get secret/storage-configuration -o json | jq '.data."config.env"' | base64 -di
+```
