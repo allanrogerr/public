@@ -5,22 +5,22 @@
 loginctl enable-linger ubuntu
 if [[ $? -eq 0 ]];
 then
-	logger "loginctl is enabled"
+  echo "loginctl is enabled" >&2
 else
-	logger "loginctl is not available"
-	exit
+  echo "loginctl is not available" >&2
+  exit 255
 fi
 
 #### Install and verify k3s
 sudo touch /dev/kmsg
-curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s - --snapshotter=fuse-overlayfs
+curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s - --snapshotter=fuse-overlayfs &> /dev/null
 systemctl is-active --quiet k3s
 if [[ $? -eq 0 ]];
 then
-	logger "k3s is available"
+  echo "k3s is available" >&2
 else
-	logger "k3s is not available"
-	exit
+  echo "k3s is not available" >&2
+  exit 255
 fi
 
 #### Install krew see https://krew.sigs.k8s.io/docs/user-guide/setup/install/ for macOS/Linux > Bash or ZSH shells
@@ -32,26 +32,26 @@ fi
   curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
   tar zxvf "${KREW}.tar.gz" &&
   ./"${KREW}" install krew
-)
+) &> /dev/null
 if [[ $? -eq 0 ]];
 then
-	logger "krew is available"
+  echo "krew is available" >&2
 else
-	logger "krew is not available"
-	exit
+  echo "krew is not available" >&2
+  exit 255
 fi
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 #### Install kubectl minio https://min.io/docs/minio/kubernetes/upstream/reference/kubectl-minio-plugin.html#installation
-kubectl krew update
-kubectl krew install minio
-kubectl minio version
+kubectl krew update &> /dev/null
+kubectl krew install minio &> /dev/null
+kubectl minio version >&2
 if [[ $? -eq 0 ]];
 then
-	logger "kubectl-minio is available"
+  echo "kubectl-minio is available" >&2
 else
-	logger "kubectl-minio is not available"
-	exit
+  echo "kubectl-minio is not available" >&2
+  exit 255
 fi
 
 #### Deploy minio
@@ -59,10 +59,10 @@ kubectl delete namespace/minio-operator
 kubectl minio init --console-tls
 if [[ $? -eq 0 ]];
 then
-	logger "minio operator is available"
+  echo "minio operator is available" >&2
 else
-	logger "minio operator is not available"
-	exit
+  echo "minio operator is not available" >&2
+  exit 255
 fi
 
 NODEPORT_HTTP=31090
@@ -71,27 +71,27 @@ NODEPORT_HTTPS=30043
 kubectl patch service -n minio-operator console -p '{"spec":{"ports":[{"name": "http","port": 9090,"protocol": "TCP","nodePort":'${NODEPORT_HTTP}'},{"name": "https","port": 9443,"protocol": "TCP","nodePort":'${NODEPORT_HTTPS}'}],"type": "NodePort"}}'
 if [[ $? -eq 0 ]];
 then
-  logger "Service was minio-operator nodeported"
+  echo "Service was minio-operator nodeported" >&2
 else
-  logger "Service was not minio-operator nodeported"
-  exit
+  echo "Service was not minio-operator nodeported" >&2
+  exit 255
 fi
 kubectl patch deployment -n minio-operator minio-operator -p '{"spec":{"replicas":1}}'
 if [[ $? -eq 0 ]];
 then
-  logger "Deployment minio-operator was shrunken"
+  echo "Deployment minio-operator was shrunken" >&2
 else
-  logger "Deployment minio-operator was not shrunken"
-  exit
+  echo "Deployment minio-operator was not shrunken" >&2
+  exit 255
 fi
 
-logger "Waiting for operator deployment to come online (30s timeout)"
+echo "Waiting for operator deployment to come online (30s timeout)"
 kubectl wait --namespace minio-operator \
   --for=condition=Available deployment \
   --field-selector metadata.name=minio-operator \
   --timeout=30s
 
-logger "Waiting for console deployment to come online (30s timeout)"
+echo "Waiting for console deployment to come online (30s timeout)"
 kubectl wait --namespace minio-operator \
   --for=condition=Available deployment \
   --field-selector metadata.name=console \
@@ -99,35 +99,36 @@ kubectl wait --namespace minio-operator \
 
 #### Wait for TLS certs to be issues and pods to be restarted automatically
 RETRY=120
-logger "Waiting for TLS certs to be issues and pods to be restarted automatically (${RETRY}s timeout)"
+echo "Waiting for TLS certs to be issues and pods to be restarted automatically (${RETRY}s timeout)"
 for ((check=1;check<=${RETRY};check++))
 do
-	if [[ ${check}>=${RETRY} ]];
-	then
-		logger "Console TLS was not enabled"
-		exit
-	fi
-	if kubectl -n minio-operator logs deployment/minio-operator | grep -q "Restarting Console pods"; 
-	then
-		logger "Console TLS was enabled"
-		break
-	else
-		logger -n "."
-	  sleep 1
-	fi
+  if [[ ${check}>=${RETRY} ]];
+  then
+    echo "Console TLS was not enabled" >&2
+    exit 255
+  fi
+  if kubectl -n minio-operator logs deployment/minio-operator | grep -q "Restarting Console pods"; 
+  then
+    echo "Console TLS was enabled" >&2
+    break
+  else
+    echo -n "."
+    sleep 1
+  fi
 done
 
 #### Get jwt
 SA_TOKEN=$(kubectl -n minio-operator get secret console-sa-secret -o jsonpath="{.data.token}" | base64 --decode)
-logger ""
-logger ""
-logger "Take note of the following JWT to access the minio operator."
-logger "----"
-logger $SA_TOKEN
-logger "----"
-logger ""
-logger ""
-logger "Access the minio operator console from https://$(hostname).lab.min.dev:${NODEPORT_HTTPS}"
+echo ""
+echo ""
+echo "Take note of the following JWT to access the minio operator." >&2
+echo "----"
+echo $SA_TOKEN >&2
+echo "----"
+echo ""
+echo ""
+echo "Access the minio operator console from https://$(hostname).lab.min.dev:${NODEPORT_HTTPS}" >&2
+echo "" >&2
 
 
 
@@ -136,16 +137,6 @@ logger "Access the minio operator console from https://$(hostname).lab.min.dev:$
 
 
 #### Tenant
-#### Persist sessions
-loginctl enable-linger ubuntu
-if [[ $? -eq 0 ]];
-then
-	logger "loginctl is enabled"
-else
-	logger "loginctl is not available"
-	exit
-fi
-
 ### Vault setup
 #### Create vault pod
 VAULT_PORT=8200
@@ -153,12 +144,12 @@ API_PORT=9000
 for pid in $(sudo lsof -i :$VAULT_PORT -t)
 do
   sudo kill "${pid}"
-  logger "Killed port forward ${pid}"
+  echo "Killed port forward ${pid}" >&2
 done
 for pid in $(sudo lsof -i :$API_PORT -t)
 do
   sudo kill "${pid}"
-  logger "Killed port forward ${pid}"
+  echo "Killed port forward ${pid}" >&2
 done
 
 rm -rf ~/github/operator && mkdir -p ~/github/operator && cd ~/github && git clone https://github.com/minio/operator.git && cd ~
@@ -166,23 +157,23 @@ VAULT_POD=$(kubectl -n default get pods -o json | jq '.items[] | select( .metada
 if [[ (! -z "${VAULT_POD}") ]];
 then
   kubectl --namespace default delete deployment/vault
-  logger "Waiting for previous vault pod ${VAULT_POD} to be removed"
+  echo "Waiting for previous vault pod ${VAULT_POD} to be removed"
   kubectl --namespace default wait --for=delete pod/$VAULT_POD --timeout=30s
 fi
 
 kubectl --namespace default delete service/vault
-logger "Waiting for previous vault services to be removed"
+echo "Waiting for previous vault services to be removed"
 kubectl --namespace default wait --for=delete svc/vault --timeout=30s
 kubectl apply -f ~/github/operator/examples/vault/deployment.yaml
 if [[ $? -eq 0 ]];
 then
-	logger "Vault deployment was applied"
+	echo "Vault deployment was applied" >&2
 else
-	logger "Vault deployment was not applied"
-	exit
+	echo "Vault deployment was not applied" >&2
+	exit 255
 fi
 
-logger "Waiting for vault pods to come online (30s timeout)"
+echo "Waiting for vault pods to come online (30s timeout)"
 kubectl wait --namespace default \
   --for=condition=Ready pod \
   --selector app=vault \
@@ -195,7 +186,7 @@ kubectl logs -l app=vault
 
 #### Get general information on vault pod
 RETRY=120
-logger "Waiting for vault to be initialized (${RETRY}s timeout)"
+echo "Waiting for vault to be initialized (${RETRY}s timeout)"
 for ((check=1;check<=${RETRY};check++))
 do
 	VAULT_LOGS=$(kubectl logs -l app=vault | tr -s '\n' ' ')
@@ -203,22 +194,22 @@ do
 	VAULT_ROOT_TOKEN=$(echo $VAULT_LOGS | sed -n "s/^.*Root Token\:\s*\(\S*\)\s*.*$/\1/p")
 	if [[ (! -z "${VAULT_ADDR}") && ! -z "${VAULT_ROOT_TOKEN}" ]]; 
 	then
-		logger "Vault was initialized"
+		echo "Vault was initialized" >&2
 		break
 	else
-	  logger -n "."
+	  echo -n "."
     sleep 1
 	fi
 done
 if [[ (-z "${VAULT_ADDR}") || -z "${VAULT_ROOT_TOKEN}" ]]; 
 then
-	logger "Vault was not initialized"
-	exit
+	echo "Vault was not initialized" >&2
+	exit 255
 fi
 
 #### Interact with vault pod
 VAULT_POD=$(kubectl -n default get pods -o json | jq '.items[] | select( .metadata.labels.app == "vault")' | jq -r '.metadata.name')
-logger "Current vault pod: ${VAULT_POD}"
+echo "Current vault pod: ${VAULT_POD}" >&2
 kubectl --namespace=default exec -it ${VAULT_POD} --container vault -- /bin/sh -c "${VAULT_ADDR}; \
 export VAULT_TOKEN=${VAULT_ROOT_TOKEN}; \
 export VAULT_FORMAT=\"json\"; \
@@ -241,15 +232,15 @@ echo \"\${VAULT_ROLE_ID}\" > VAULT_ROLE_ID.var \
 export VAULT_SECRET_ID=\$(vault write -f auth/approle/role/kes-role/secret-id | grep -o '\"secret_id\": \"[^\"]*' | grep -o '[^\"]*$'); \
 echo \"\${VAULT_SECRET_ID}\" > VAULT_SECRET_ID.var"
 VAULT_ROLE_ID=$(kubectl --namespace=default exec -it ${VAULT_POD} --container vault -- /bin/sh -c "cat VAULT_ROLE_ID.var | tr -d '\n'")
-logger "Role Id: $VAULT_ROLE_ID"
+echo "Role Id: $VAULT_ROLE_ID"
 VAULT_SECRET_ID=$(kubectl --namespace=default exec -it ${VAULT_POD} --container vault -- /bin/sh -c "cat VAULT_SECRET_ID.var | tr -d '\n'")
-logger "Secret Id: $VAULT_SECRET_ID"
+echo "Secret Id: $VAULT_SECRET_ID"
 if [[ (! -z "${VAULT_ROLE_ID}") && ! -z "${VAULT_SECRET_ID}" ]]; 
 then
-  logger "Vault was configured"
+  echo "Vault was configured" >&2
 else
-  logger "Vault was not configured"
-  exit
+  echo "Vault was not configured" >&2
+  exit 255
 fi
 
 #### Customize kustomize
@@ -323,19 +314,19 @@ EOF
 sudo snap install kustomize
 if [[ $? -eq 0 ]];
 then
-	logger "Kustomize was installed"
+	echo "Kustomize was installed" >&2
 else
-	logger "Kustomize was not installed"
-	exit
+	echo "Kustomize was not installed" >&2
+	exit 255
 fi
 kubectl delete namespace/tenant-kms-encrypted
 kustomize build ~/github/operator/examples/kustomization/tenant-kes-encryption | kubectl apply -f -
 if [[ $? -eq 0 ]];
 then
-	logger "Kustomization was built"
+	echo "Kustomization was built" >&2
 else
-	logger "Kustomization was not built"
-	exit
+	echo "Kustomization was not built" >&2
+	exit 255
 fi
 
 #### Tweak tenant size and storeclass/pvcs
@@ -343,29 +334,29 @@ SERVERS=4
 kubectl patch tenant -n tenant-kms-encrypted myminio --type='merge' -p  '{"spec":{"pools":[{"name": "pool-0", "servers": '${SERVERS}', "volumesPerServer": 1, "volumeClaimTemplate": {"apiVersion": "v1", "metadata": {"name": "data"}, "spec": {"accessModes": ["ReadWriteOnce"], "resources": {"requests": {"storage": "1Gi"}}, "storageClassName": "local-path"}}}]}}'
 if [[ $? -eq 0 ]];
 then
-	logger "Tenant was resized"
+	echo "Tenant was resized" >&2
 else
-	logger "Tenant was not resized"
-	exit
+	echo "Tenant was not resized" >&2
+	exit 255
 fi
 
 kubectl -n tenant-kms-encrypted delete pods -l app=minio
 kubectl -n tenant-kms-encrypted delete statefulset/myminio-pool-0
 kubectl -n tenant-kms-encrypted delete statefulset/myminio-kes
 
-logger "Waiting for tenant to be initialized (240s timeout)"
+echo "Waiting for tenant to be initialized (240s timeout)"
 kubectl wait --namespace tenant-kms-encrypted \
   --for=jsonpath='{.status.currentState}'=Initialized tenant \
   --field-selector metadata.name=myminio \
   --timeout=240s
 
-logger "Waiting for statefulset to be initialized (240s timeout)"
+echo "Waiting for statefulset to be initialized (240s timeout)"
 kubectl wait --namespace tenant-kms-encrypted \
   --for=jsonpath='{.status.replicas}='${SERVERS} statefulset \
   --selector v1.min.io/tenant=myminio \
   --timeout=240s
 
-logger "Waiting for tenant pods to come online (240s timeout)"
+echo "Waiting for tenant pods to come online (240s timeout)"
 kubectl wait --namespace tenant-kms-encrypted \
   --for=condition=Ready pod \
   --selector v1.min.io/tenant=myminio \
@@ -373,20 +364,20 @@ kubectl wait --namespace tenant-kms-encrypted \
 
 #### Wait minio to come online
 RETRY=120
-logger "Waiting for minio to come online (${RETRY}s timeout)"
+echo "Waiting for minio to come online (${RETRY}s timeout)"
 for ((check=1;check<=${RETRY};check++))
 do
   if [[ ${check}>=${RETRY} ]];
   then
-    logger "minio was not started successfully"
-    exit
+    echo "minio was not started successfully" >&2
+    exit 255
   fi
   if kubectl -n tenant-kms-encrypted logs pod/myminio-pool-0-0 | grep -q "All MinIO sub-systems initialized successfully"; 
   then
-    logger "minio was started successfully"
+    echo "minio was started successfully" >&2
     break
   else
-    logger -n "."
+    echo -n "."
     sleep 1
   fi
 done
@@ -397,22 +388,22 @@ NODEPORT_HTTPS=30045
 kubectl patch service -n tenant-kms-encrypted myminio-console -p '{"spec":{"ports":[{"name": "http-console","port": 9090,"protocol": "TCP","nodePort":'${NODEPORT_HTTP}'},{"name": "https-console","port": 9443,"protocol": "TCP","nodePort":'${NODEPORT_HTTPS}'}],"type": "NodePort"}}'
 if [[ $? -eq 0 ]];
 then
-  logger "Service was nodeported"
+  echo "Service was nodeported" >&2
 else
-  logger "Service was not nodeported"
-  exit
+  echo "Service was not nodeported" >&2
+  exit 255
 fi
 
 #### Install mc and validate
-mkdir -p ~/mc && cd ~/mc && rm -rf mc* && wget https://dl.min.io/client/mc/release/linux-amd64/mc
+mkdir -p ~/mc && cd ~/mc && rm -rf mc* && wget https://dl.min.io/client/mc/release/linux-amd64/mc &> /dev/null
 chmod +x mc && cd ~
 
 #### Add a validating port forward
 RETRY=10
 for ((check=1;check<=${RETRY};check++))
 do
-  kubectl port-forward svc/myminio-hl $API_PORT:$API_PORT -n tenant-kms-encrypted &
-  mc/mc alias set kes-demo https://127.0.0.1:$API_PORT minio minio123 --insecure
+  kubectl port-forward svc/myminio-hl $API_PORT:$API_PORT -n tenant-kms-encrypted &> /dev/null &
+  mc/mc alias set kes-demo https://127.0.0.1:$API_PORT minio minio123 --insecure &> /dev/null
   if [[ $? -eq 0 ]];
   then
     break
@@ -420,15 +411,17 @@ do
   for pid in $(sudo lsof -i :$API_PORT -t)
   do
     sudo kill "${pid}"
-    logger -n "."
+    echo -n "."
   done
   sleep 1
 done
 
-mc/mc admin kms key status kes-demo --insecure
+mc/mc admin kms key status kes-demo --insecure >&2
 
-logger ""
-logger ""
-logger "Access the minio tenant console from https://$(hostname).lab.min.dev:${NODEPORT_HTTPS} using minio/minio123"
-logger ""
-logger ""
+echo ""
+echo ""
+echo "Access the minio tenant console from https://$(hostname).lab.min.dev:${NODEPORT_HTTPS} using minio/minio123" >&2
+echo ""
+echo ""
+
+exit 0

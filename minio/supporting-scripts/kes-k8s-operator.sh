@@ -5,22 +5,22 @@
 loginctl enable-linger ubuntu
 if [[ $? -eq 0 ]];
 then
-	logger "loginctl is enabled"
+	echo "loginctl is enabled" >&2
 else
-	logger "loginctl is not available"
-	exit
+	echo "loginctl is not available" >&2
+	exit 255
 fi
 
 #### Install and verify k3s
 sudo touch /dev/kmsg
-curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s - --snapshotter=fuse-overlayfs
+curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s - --snapshotter=fuse-overlayfs &> /dev/null
 systemctl is-active --quiet k3s
 if [[ $? -eq 0 ]];
 then
-	logger "k3s is available"
+	echo "k3s is available" >&2
 else
-	logger "k3s is not available"
-	exit
+	echo "k3s is not available" >&2
+	exit 255
 fi
 
 #### Install krew see https://krew.sigs.k8s.io/docs/user-guide/setup/install/ for macOS/Linux > Bash or ZSH shells
@@ -32,26 +32,26 @@ fi
   curl -fsSLO "https://github.com/kubernetes-sigs/krew/releases/latest/download/${KREW}.tar.gz" &&
   tar zxvf "${KREW}.tar.gz" &&
   ./"${KREW}" install krew
-)
+) &> /dev/null
 if [[ $? -eq 0 ]];
 then
-	logger "krew is available"
+	echo "krew is available" >&2
 else
-	logger "krew is not available"
-	exit
+	echo "krew is not available" >&2
+	exit 255
 fi
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 
 #### Install kubectl minio https://min.io/docs/minio/kubernetes/upstream/reference/kubectl-minio-plugin.html#installation
-kubectl krew update
-kubectl krew install minio
-kubectl minio version
+kubectl krew update &> /dev/null
+kubectl krew install minio &> /dev/null
+kubectl minio version >&2
 if [[ $? -eq 0 ]];
 then
-	logger "kubectl-minio is available"
+	echo "kubectl-minio is available" >&2
 else
-	logger "kubectl-minio is not available"
-	exit
+	echo "kubectl-minio is not available" >&2
+	exit 255
 fi
 
 #### Deploy minio
@@ -59,10 +59,10 @@ kubectl delete namespace/minio-operator
 kubectl minio init --console-tls
 if [[ $? -eq 0 ]];
 then
-	logger "minio operator is available"
+	echo "minio operator is available" >&2
 else
-	logger "minio operator is not available"
-	exit
+	echo "minio operator is not available" >&2
+	exit 255
 fi
 
 NODEPORT_HTTP=31090
@@ -71,27 +71,27 @@ NODEPORT_HTTPS=30043
 kubectl patch service -n minio-operator console -p '{"spec":{"ports":[{"name": "http","port": 9090,"protocol": "TCP","nodePort":'${NODEPORT_HTTP}'},{"name": "https","port": 9443,"protocol": "TCP","nodePort":'${NODEPORT_HTTPS}'}],"type": "NodePort"}}'
 if [[ $? -eq 0 ]];
 then
-  logger "Service was minio-operator nodeported"
+  echo "Service was minio-operator nodeported" >&2
 else
-  logger "Service was not minio-operator nodeported"
-  exit
+  echo "Service was not minio-operator nodeported" >&2
+  exit 255
 fi
 kubectl patch deployment -n minio-operator minio-operator -p '{"spec":{"replicas":1}}'
 if [[ $? -eq 0 ]];
 then
-  logger "Deployment minio-operator was shrunken"
+  echo "Deployment minio-operator was shrunken" >&2
 else
-  logger "Deployment minio-operator was not shrunken"
-  exit
+  echo "Deployment minio-operator was not shrunken" >&2
+  exit 255
 fi
 
-logger "Waiting for operator deployment to come online (30s timeout)"
+echo "Waiting for operator deployment to come online (30s timeout)"
 kubectl wait --namespace minio-operator \
   --for=condition=Available deployment \
   --field-selector metadata.name=minio-operator \
   --timeout=30s
 
-logger "Waiting for console deployment to come online (30s timeout)"
+echo "Waiting for console deployment to come online (30s timeout)"
 kubectl wait --namespace minio-operator \
   --for=condition=Available deployment \
   --field-selector metadata.name=console \
@@ -99,32 +99,33 @@ kubectl wait --namespace minio-operator \
 
 #### Wait for TLS certs to be issues and pods to be restarted automatically
 RETRY=120
-logger "Waiting for TLS certs to be issues and pods to be restarted automatically (${RETRY}s timeout)"
+echo "Waiting for TLS certs to be issues and pods to be restarted automatically (${RETRY}s timeout)"
 for ((check=1;check<=${RETRY};check++))
 do
 	if [[ ${check}>=${RETRY} ]];
 	then
-		logger "Console TLS was not enabled"
-		exit
+		echo "Console TLS was not enabled" >&2
+		exit 255
 	fi
 	if kubectl -n minio-operator logs deployment/minio-operator | grep -q "Restarting Console pods"; 
 	then
-		logger "Console TLS was enabled"
+		echo "Console TLS was enabled" >&2
 		break
 	else
-		logger -n "."
+		echo -n "."
 	  sleep 1
 	fi
 done
 
 #### Get jwt
 SA_TOKEN=$(kubectl -n minio-operator get secret console-sa-secret -o jsonpath="{.data.token}" | base64 --decode)
-logger ""
-logger ""
-logger "Take note of the following JWT to access the minio operator."
-logger "----"
-logger $SA_TOKEN
-logger "----"
-logger ""
-logger ""
-logger "Access the minio operator console from https://$(hostname).lab.min.dev:${NODEPORT_HTTPS}"
+echo ""
+echo ""
+echo "Take note of the following JWT to access the minio operator." >&2
+echo "----"
+echo $SA_TOKEN >&2
+echo "----"
+echo ""
+echo ""
+echo "Access the minio operator console from https://$(hostname).lab.min.dev:${NODEPORT_HTTPS}" >&2
+exit 0
